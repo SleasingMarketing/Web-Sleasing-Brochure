@@ -1,0 +1,884 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>โบรชัวร์ผ่อนมือถือ</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#1a1d24; --soft:#6b7280; --line:#e8ebf0;
+    --brand:#ffc400; --brand-ink:#1a1d24; --brand-deep:#e0a800;
+    --paper:#dfe3e9; --down-bg:#f1f1f2; --down-ink:#1a1d24;
+    --thead-bg:#1c3361; /* สีน้ำเงินหัวตาราง คงที่ทุกแบรนด์ */
+    --line-h:17px; /* ความสูงแต่ละบรรทัดในตารางผ่อน - ลดให้การ์ดแบนลง */
+    /* A4 ที่ 96dpi = 794 x 1123 px, หัก margin 6mm(~23px)*2 */
+    --page-w:794px; --page-h:1123px; --page-pad:12px; --page-pad-x:22px;
+
+    /* ===== ตัวแปรธีมการ์ด (แก้ผ่านปุ่มชุดสี/color picker ด้านบน) =====
+       ค่าเหล่านี้จะถูกเขียนทับที่ระดับ .page ผ่าน JS ตามธีมที่เลือก */
+    --card-bg:#ffffff;   /* พื้นการ์ด (ทึบ) */
+    --card-ink:#1a1d24;  /* ตัวหนังสือหลักในการ์ด */
+    --card-soft:#6b7280; /* ตัวหนังสือรอง (สเปก/ความจุ) */
+    --card-accent:#e0a800; /* สีเน้น เช่น เลขความจุ */
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:"Noto Sans Thai",system-ui,sans-serif;color:var(--ink);background:var(--paper);line-height:1.3}
+
+  /* ===== Controls (ไม่พิมพ์) ===== */
+  .controls{position:sticky;top:0;z-index:50;background:#0f1720;color:#fff;padding:12px 18px;display:flex;gap:12px;align-items:center;flex-wrap:wrap;box-shadow:0 2px 12px rgba(0,0,0,.15)}
+  .controls .t{font-family:"Noto Sans Thai",sans-serif;font-weight:800;font-size:15px;margin-right:auto;display:flex;align-items:center;gap:8px}
+  .controls .t .dot{width:8px;height:8px;border-radius:50%;background:#4d8bff;box-shadow:0 0 0 4px rgba(77,139,255,.25)}
+  .btn{font-family:inherit;font-size:13.5px;font-weight:600;cursor:pointer;padding:8px 14px;border-radius:8px;border:1px solid #2b3648;background:#1a2330;color:#e6ebf2;display:inline-flex;align-items:center;gap:7px;transition:.15s;white-space:nowrap}
+  .btn:hover{background:#232f40;border-color:#3a475c}
+  .btn.primary{background:#1763ff;border-color:#1763ff;color:#fff}
+  .btn.ok{background:#0b7a4b;border-color:#0b7a4b;color:#fff}
+  .btn input{display:none}
+  .status{font-size:12px;color:#93a1b5;white-space:nowrap}
+  .filters{display:flex;gap:6px;flex-wrap:wrap}
+  .chip{font-size:12px;font-weight:600;padding:6px 11px;border-radius:999px;cursor:pointer;border:1px solid #2b3648;background:#1a2330;color:#aeb9c8;transition:.15s;white-space:nowrap}
+  .chip:hover{border-color:#3a475c;color:#fff}
+  .chip.active{background:#fff;border-color:#fff;color:#0f1720}
+  .swatch{display:flex;align-items:center;gap:7px;font-size:12px;color:#93a1b5}
+  .swatch input[type=color]{width:30px;height:26px;border:none;border-radius:6px;background:none;cursor:pointer;padding:0}
+
+  /* ===== Intro ===== */
+  .intro{max-width:720px;margin:48px auto;padding:0 24px;text-align:center;color:var(--soft)}
+  .intro h1{font-family:"Noto Sans Thai",sans-serif;font-size:24px;color:var(--ink);margin-bottom:10px}
+  .intro ol{text-align:left;display:inline-block;margin:16px auto 0;line-height:1.9;font-size:14.5px}
+  .intro .note{margin-top:18px;font-size:13px;background:#fff;border:1px solid var(--line);border-radius:10px;padding:13px 15px;text-align:left}
+
+  /* ===== A4 page (ตายตัว) ===== */
+  .page{
+    width:var(--page-w);min-height:var(--page-h);height:var(--page-h);
+    margin:20px auto;background:#ffffff;
+    background-image:var(--bg-img,none);background-size:cover;background-position:center;
+    padding:2px var(--page-pad-x) var(--page-pad);border-radius:6px;box-shadow:0 3px 16px rgba(16,23,32,.12);
+    display:flex;flex-direction:column;overflow:hidden;
+  }
+  .head{display:flex;align-items:center;justify-content:space-between;padding:12px 12px;flex:0 0 auto;margin-bottom:2px}
+  .shop{display:flex;align-items:center;gap:9px;font-family:"Noto Sans Thai",sans-serif;font-weight:800;font-size:18px;color:var(--head-ink)}
+  .shop .mark{width:30px;height:30px;border-radius:7px;background:var(--head-ink);color:#fff;display:flex;align-items:center;justify-content:center;font-size:15px}
+  .brandname{font-family:"Noto Sans Thai",sans-serif;font-weight:800;font-size:28px;letter-spacing:-.02em;color:var(--head-ink);text-transform:lowercase}
+
+  .thead{
+    display:grid;grid-template-columns:var(--grid);
+    background:var(--thead-bg);color:var(--thead-ink,#fff);font-weight:700;font-size:var(--head-fs,10.5px);
+    padding:3px var(--card-pad-r) 3px 0;text-align:center;align-items:center;border-radius:7px;flex:0 0 auto;
+  }
+  .thead > div{position:relative}
+  .thead > div + div::before{
+    content:"";position:absolute;left:0;top:50%;transform:translateY(-50%);
+    height:60%;width:1px;background:var(--thead-ink,#fff);opacity:.3;
+  }
+  .thead .badges{display:flex;gap:5px;justify-content:flex-start;padding-left:10px;align-items:center}
+  .thead .badges::before{display:none}
+  .pill{background:#ff5630;color:#fff;font-size:10px;font-weight:700;padding:2px 8px;border-radius:999px;white-space:nowrap}
+  .pill.tax{background:transparent;color:var(--thead-ink,#fff);border:1.5px solid var(--thead-ink,#fff)}
+  .pill.ins{background:var(--thead-ink,#fff);color:var(--thead-bg);border:1.5px solid var(--thead-ink,#fff)}
+
+  .cards{flex:1 1 auto;display:flex;flex-direction:column;gap:5px;padding-top:5px}
+
+  :root{--img-col:119px;--img-pad-l:15px;--img-pad-r:5px;--img-h:95px;--divider-gap-r:14px;--card-pad-r:10px} /* คอลัมน์รูป = ซ้าย 15 + รูป 94 + ขวา 10 (ค่าจริงตั้งจาก JS: IMG_COL/IMG_PAD_L/IMG_PAD_R) */
+  .card{
+    background:var(--card-bg);
+    color:var(--card-ink);
+    border-radius:7px;overflow:hidden;
+    display:grid;grid-template-columns:var(--img-col) 1fr;flex:0 0 auto;
+    box-shadow:0 1px 3px rgba(16,23,32,.08);
+  }
+  .card .cimg{display:flex;align-items:center;justify-content:center;padding:5px var(--img-pad-r) 5px var(--img-pad-l);border-right:0px solid var(--line)}
+  .card .cimg .thumb{width:100%;height:var(--img-h);display:flex;align-items:center;justify-content:center;overflow:hidden}
+  .card .cimg img{width:100%;height:100%;object-fit:contain}
+  .card .cimg .ph{color:#c3cbd6;font-size:9px;text-align:center;border:1px dashed #d5dbe4;border-radius:5px;padding:8px 3px;width:100%}
+  .variants{display:flex;flex-direction:column;padding-right:var(--card-pad-r)} /* ช่องไฟขวาสุดของการ์ด (หัวตารางเว้นเท่ากัน) */
+
+  .variant{display:grid;grid-template-columns:var(--vgrid);align-items:stretch;flex:1 1 auto} /* ยืดแถวให้เต็มความสูงการ์ด (รูปสูงกว่าตาราง) เนื้อหาจะอยู่กึ่งกลางแนวตั้ง ไม่ลอยบนแล้วเหลือที่ว่างข้างล่าง */
+  .variant{position:relative}
+  /* เส้นคั่นระหว่างรุ่นย่อย: เว้นด้านขวา (--divider-gap-r) ไม่ให้ชิดขอบการ์ด */
+  .variant + .variant::before{content:"";position:absolute;top:0;left:0;right:calc(var(--divider-gap-r) - var(--card-pad-r));height:1px;background:var(--card-divider,rgba(0,0,0,.08))}
+  .v-name{padding:5px 9px;border-right:0px solid var(--line);display:flex;flex-direction:column;justify-content:center}
+  .v-name .brand{font-family:"Noto Sans Thai",sans-serif;font-weight:700;font-size:13px;text-transform:uppercase;letter-spacing:.03em;margin-bottom:1px;color:var(--card-ink)}
+  .v-name .n{font-family:"Noto Sans Thai",sans-serif;font-weight:700;font-size:18px;line-height:1.05;letter-spacing:-.01em;color:var(--card-ink)}
+  .v-name .spec{font-size:10px;font-weight:600;color:var(--card-soft);margin-top:1px}
+  .v-name .spec b{color:var(--card-accent)}
+  .v-price{text-align:center;font-family:"Noto Sans Thai",sans-serif;font-weight:600;font-size:16px;padding:4px;border-right:0px solid var(--line);display:flex;align-items:center;justify-content:center;color:var(--card-ink)}
+  /* ทุก cell จัดบรรทัดเท่ากันเป๊ะด้วย --line-h */
+  .v-cell{padding:4px 6px;font-size:13px;display:flex;flex-direction:column;justify-content:center;color:var(--card-ink)}
+  .v-cell.term{font-size:var(--term-fs,13px)}
+  .v-cell.yod{text-align:center;font-weight:500}
+  .v-cell.down{}
+  .v-cell.term{text-align:center}
+  .v-cell + .v-cell{border-left:0px solid var(--line)}
+  /* แต่ละบรรทัดในทุกช่อง สูง = --line-h เท่ากัน -> ตรงกันแนวนอน */
+  .v-cell > div{height:var(--line-h);display:flex;align-items:center;justify-content:flex-end}
+  .v-cell.term > div{justify-content:center}
+  .v-cell.yod > div{justify-content:center}
+  .v-cell.down > .drow{justify-content:flex-start;gap:5px}
+  .drow .dp{background:var(--card-pill-bg,var(--down-bg));color:var(--card-pill-ink,var(--down-ink));font-size:9px;font-weight:700;padding:0 4px;border-radius:3px;min-width:26px;text-align:center;line-height:1.5;height:15px;display:inline-flex;align-items:center;justify-content:center}
+  .drow .dv{font-weight:500}
+  .tv{font-variant-numeric:tabular-nums}
+
+  .foot{flex:0 0 auto;display:flex;justify-content:space-between;align-items:flex-end;padding:7px 10px;font-size:10.5px;color:#1a1d24;gap:12px;margin-top:auto;min-height:74px}
+  .foot .cond{max-width:78%;line-height:1.35;opacity:.85}
+  .foot .upd{font-weight:700;white-space:nowrap}
+  .empty{text-align:center;padding:40px;color:var(--soft);background:#fff;border-radius:8px}
+
+  /* กล่องวัดความสูง (ซ่อน) */
+  #measure{position:absolute;left:-99999px;top:0;width:calc(var(--page-w) - var(--page-pad-x)*2);visibility:hidden}
+
+  @media print{
+    @page{size:A4 portrait;margin:0}
+    body{background:#fff}
+    .controls,.intro{display:none!important}
+    .page{width:210mm;height:297mm;min-height:297mm;margin:0;box-shadow:none;border-radius:0;page-break-after:always;break-after:page}
+    .page:last-child{page-break-after:auto;break-after:auto}
+    *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  }
+
+  /* ===== เลย์เอาต์ใหม่ตามแบบ AddedArtboard 1–4 ===== */
+  :root{--spec-ink:#1763ff;--card-r:26px;--band-r:22px;--band-bg:rgba(0,0,0,.055)}
+  .thead{border-radius:999px;font-weight:400}
+  .thead .pill{font-weight:600}
+  .thead .pill:not(.tax){background:transparent;color:var(--thead-ink,#fff);border:1.5px solid var(--thead-ink,#fff)}
+  .thead .pill.tax.vat{background:linear-gradient(180deg,#b8e65a,#2f9e44);color:#fff;border:0;padding:3px 10px}
+  .thead .pill.tax.novat{background:linear-gradient(180deg,#ffc15a,#ee7d0e);color:#fff;border:0;padding:3px 10px}
+  .card{border-radius:var(--card-r);isolation:isolate;box-shadow:none}
+  .variant + .variant::before{display:none}
+  /* รุ่นย่อยลำดับคู่: แถบสีเทาอ่อนเริ่มจากคอลัมน์ชื่อรุ่น (ไม่คลุมรูป) ปลายซ้ายมน ปลายขวาชิดขอบการ์ด */
+  .variant:nth-child(even)::after{content:"";position:absolute;z-index:-1;top:0;bottom:0;left:0;right:calc(-1*var(--card-pad-r));background:var(--band-bg);border-radius:var(--band-r) 0 0 var(--band-r)}
+  .v-name{position:relative;padding:5px 12px 5px 9px}
+  .v-name::after{content:"";position:absolute;right:0;top:14%;bottom:14%;width:1px;background:var(--sep-ink,rgba(0,0,0,.18))}
+  .v-name{min-width:0}
+  .v-name .brand,.v-name .n,.v-name .spec{overflow-wrap:anywhere}
+  .v-name .brand{font-size:14px;font-weight:500;letter-spacing:.02em}
+  .v-name .n{font-size:20px;font-weight:500;line-height:1.1;letter-spacing:0}
+  .v-name .spec{font-size:15px;font-weight:500;color:var(--spec-ink);margin-top:2px}
+  .v-price{font-size:17px;font-weight:600}
+  .v-cell{font-weight:400;padding-top:3px;padding-bottom:3px}
+  .drow .dp{background:#a8a8a8;color:#fff;border-radius:999px;font-weight:600}
+
+  /* ===== หัวหน้าเว็บแบบกะทัดรัด ===== */
+  .intro{display:none!important}
+  .hdr{max-width:794px;margin:14px auto 12px;background:#fff;border-radius:18px;padding:14px 22px 14px;color:#111;font-family:"Noto Sans Thai",sans-serif}
+  .hdr h1{font-size:22px;font-weight:600;margin:0 0 6px}
+  .hrow{display:flex;align-items:center;gap:12px;margin:7px 0}
+  .hl{font-size:20px;font-weight:500;min-width:96px}
+  .hpill{border:1.5px solid #111;border-radius:999px;padding:3px 22px;font-size:15px;font-weight:500;background:#fff;color:#111;min-width:150px;text-align:center;font-family:inherit}
+  select.hpill{-webkit-appearance:none;appearance:none;cursor:pointer;text-align-last:center}
+  .modes{display:grid;grid-template-columns:repeat(2,minmax(0,150px));gap:8px}
+  .hdr .modes .chip{background:var(--c);color:#fff;border:0;border-radius:999px;padding:6px 18px;font-size:15px;font-weight:600;opacity:.4;font-family:inherit}
+  .hdr .modes .chip:hover{opacity:.75;color:#fff}
+  .hdr .modes .chip.active{opacity:1;box-shadow:0 0 0 2px #fff,0 0 0 4px var(--c)}
+  .hstatus{margin-top:6px;font-size:11.5px;color:#8a93a0}
+  #legacy:not([hidden]){display:block}
+  @media print{.hdr,#legacy{display:none!important}}
+
+  /* โลโก้แบรนด์ (ปรับตำแหน่ง/ขนาดได้ที่ตัวแปรเหล่านี้) */
+  :root{--logo-top:17px;--logo-right:22px;--logo-h:30px;--logo-max-w:150px}
+  .page{position:relative}
+  .brand-logo{position:absolute;top:var(--logo-top);right:var(--logo-right);height:var(--logo-h);max-width:var(--logo-max-w);object-fit:contain;object-position:right center;pointer-events:none}
+</style>
+</head>
+<body>
+
+<div class="hdr" id="hdr">
+  <h1>โบรชัวร์ผ่อนมือถือ</h1>
+  <div class="hrow"><span class="hl">ดอกเบี้ย:</span><span class="hpill" id="rateView">–</span></div>
+  <div class="hrow"><span class="hl">แบรนด์:</span><select class="hpill" id="brandSel"><option value="">ชื่อแบรนด์</option></select></div>
+  <div class="hrow"><span class="hl">ราคา:</span>
+    <div class="modes" id="vatToggle">
+      <button class="chip active" data-mode="vat" style="--c:#1763ff">Vat</button>
+      <button class="chip" data-mode="novat" style="--c:#3a3a3c">NoVat</button>
+      <button class="chip" data-mode="gaijin" style="--c:#1b6b3a">AlienVat</button>
+      <button class="chip" data-mode="gaijinnovat" style="--c:#a41c35">AlienNoVat</button>
+    </div>
+  </div>
+  <div class="hstatus status" id="status">กำลังโหลดข้อมูล…</div>
+</div>
+
+<div id="legacy" hidden>
+
+<div class="controls">
+  <div class="t"><span class="dot"></span>โบรชัวร์ผ่อนมือถือ</div>
+  <label class="btn primary">📄 เลือกไฟล์ Excel<input type="file" id="xlsxInput" accept=".xlsx,.xls"></label>
+  <label class="btn">🖼️ เลือกโฟลเดอร์รูป<input type="file" id="imgInput" webkitdirectory directory multiple></label>
+  <label class="btn">🎨 พื้นหลัง<input type="file" id="bgInput" accept="image/*"></label>
+  <label class="btn" title="เลือกโฟลเดอร์ที่มีไฟล์พื้นหลัง .png ของทุกแบรนด์ ระบบจับคู่กับแบรนด์ให้เอง">🗂️ โฟลเดอร์พื้นหลัง<input type="file" id="bgDirInput" webkitdirectory directory multiple></label>
+  <button class="btn" id="bgClear" style="display:none">✕ ล้างพื้นหลัง</button>
+  <button class="btn ok" id="printBtn" style="display:none" onclick="window.print()">🖨️ พิมพ์ / PDF</button>
+  <div class="filters" id="filters"></div>
+  <div class="status" id="legacyStatus">โหมดสำรอง: เลือกไฟล์ Excel / รูป / พื้นหลังเอง</div>
+</div>
+
+<div class="controls" id="themeBar" style="top:auto">
+  <div class="t" style="font-size:13px"><span class="dot" style="background:#ffc400;box-shadow:0 0 0 4px rgba(255,196,0,.25)"></span>ธีมสีการ์ด</div>
+  <div class="filters" id="themePresets"></div>
+  <div class="swatch">พื้นการ์ด <input type="color" id="cCardBg" value="#ffffff"></div>
+  <div class="swatch">ตัวหนังสือ <input type="color" id="cCardInk" value="#1a1d24"></div>
+  <div class="swatch">หัวตาราง <input type="color" id="cTheadBg" value="#1c3361"></div>
+  <label class="swatch" style="gap:5px;cursor:pointer"><input type="checkbox" id="autoInk" checked style="cursor:pointer"> ปรับสีตัวหนังสือ/หัวตารางให้อ่านออกอัตโนมัติ</label>
+  <button class="btn" id="themeReset">↺ ค่าเริ่มต้น</button>
+</div>
+
+</div>
+
+<div class="intro" id="intro">
+  <h1>สร้างโบรชัวร์ราคาผ่อน</h1>
+  <p>ทำงานบนเครื่องคุณ ไม่ต้องต่อเน็ต · แต่ละหน้าเป็น A4 เป๊ะ ตัดหน้าเองด้วยการวัดความสูงจริง</p>
+  <ol>
+    <li>กด <b>เลือกไฟล์ Excel</b> → เลือก pricelist.xlsx</li>
+    <li>กด <b>เลือกโฟลเดอร์รูป</b> → โฟลเดอร์ที่มี 1.jpg, 2.jpg, … (ข้ามได้)</li>
+    <li>เลือกแบรนด์ / ปรับสีพื้นหลัง → กด <b>พิมพ์ / PDF</b></li>
+  </ol>
+  <div class="note">💡 รุ่นชื่อเดียวกันต่างแค่ความจุจะรวมเป็นการ์ดเดียว · การ์ดวางลงหน้า A4 โดยไม่ถูกตัดครึ่ง (วัดความสูงจริงก่อนจัดหน้า) · แสดงทุกรุ่นที่มีชื่อ+ราคา ช่องไหนว่างหรือมี "-" จะโชว์เป็นช่องว่าง/เครื่องหมายขีดแทน</div>
+</div>
+
+<div id="measure"></div>
+<div id="output"></div>
+
+<script>
+const HEADER_ROWS=2;
+let INSTALLMENT_RATE = 0.03; // ค่าเริ่มต้น/fallback — จะถูกแทนที่ด้วยค่าจาก A1 ในชีต "Detail Price" ทันทีที่โหลดไฟล์ Excel
+const DOWNS_SETS={
+  // Vat / NoVat: โครงสร้าง 5 ก้อนดาวน์ 15/20/25/35/40% (แก้ label 30→35, 35→40 ให้ตรงกับหัวคอลัมน์จริงในชีต)
+  vat:   [{pct:"15%",start:5},{pct:"20%",start:14},{pct:"25%",start:23},{pct:"35%",start:32},{pct:"40%",start:41}],
+  novat: [{pct:"15%",start:5},{pct:"20%",start:14},{pct:"25%",start:23},{pct:"35%",start:32},{pct:"40%",start:41}],
+  // Gaijin: ดาวน์ 20/25/30/35/40% (ตำแหน่งคอลัมน์เหมือนเดิม)
+  gaijin:[{pct:"20%",start:5},{pct:"25%",start:14},{pct:"30%",start:23},{pct:"35%",start:32},{pct:"40%",start:41}],
+  // Promotion: ค่าสำรอง 5/10/15% (ปกติอ่านจากหัวคอลัมน์ "Down N%" ในชีตเอง)
+  promotion:[{pct:"5%",start:5},{pct:"10%",start:14},{pct:"15%",start:23}],
+  gaijinnovat:[{pct:"20%",start:5},{pct:"25%",start:14},{pct:"30%",start:23},{pct:"35%",start:32},{pct:"40%",start:41}],
+};
+let DOWNS=DOWNS_SETS.vat;
+const TERMS=[{l:"6 เดือน",o:3},{l:"9 เดือน",o:4},{l:"12 เดือน",o:5},{l:"15 เดือน",o:6},{l:"18 เดือน",o:7}];
+const BRAND_ORDER=["HONOR","HUAWEI","INFINIX","Nubia","realme","SAMSUNG","TECNO","REDMI","XIAOMI","OPPO","vivo","APPLE"];
+const BRAND_THEME={
+  realme:["#ffc400","#1a1d24","#e0a800"], SAMSUNG:["#1428a0","#ffffff","#0c1a6b"],
+  HUAWEI:["#c8102e","#ffffff","#980c22"], HONOR:["#00a3e0","#ffffff","#0077a3"],
+  XIAOMI:["#ff6900","#ffffff","#cc5400"], REDMI:["#ff6900","#ffffff","#cc5400"],
+  INFINIX:["#0a1f44","#ffffff","#061229"], TECNO:["#0033a0","#ffffff","#002270"],
+  Nubia:["#e60012","#ffffff","#b3000e"], OPPO:["#046a38","#ffffff","#034d28"],
+  vivo:["#415fff","#ffffff","#2d47cc"], APPLE:["#1a1d24","#ffffff","#000000"],
+};
+// ความสูง A4 - padding, และพื้นที่ header+thead+footer โดยประมาณ (px @96dpi)
+const PAGE_PAD_TOP=2, PAGE_PAD_BOT=12, HEAD_H=62, THEAD_H=30, FOOT_H=88, GAP=5, SAFETY=28;
+const PAGE_H=1123;
+const CONTENT_H = PAGE_H - PAGE_PAD_TOP - PAGE_PAD_BOT - HEAD_H - THEAD_H - FOOT_H - SAFETY;
+
+// ความสูงบรรทัด (--line-h) แบบยืดหยุ่นต่อหน้า: ต่ำสุด = ค่าที่ตั้งไว้ใน CSS (:root),
+// สูงสุด = เพดานที่ยอมให้ยืด เพื่อดันการ์ดให้เต็มพื้นที่ A4 พอดี ลดที่ว่างด้านล่าง
+const LINE_H_MIN = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--line-h')) || 17;
+const LINE_H_MAX = 25; // ปรับตัวเลขนี้ได้ถ้าอยากให้ยืดได้มาก/น้อยกว่านี้
+
+// กริดคำนวณสดตามจำนวนค่างวด (TERMS.length) เพื่อไม่ให้ล้น/ตกบรรทัดถ้ามีการเพิ่มค่างวดในอนาคต
+// รูปสูงคงที่ 100px ความกว้างตามสัดส่วนรูป คอลัมน์รูป = ช่องไฟซ้าย 15 + รูปที่กว้างที่สุดในชุดที่แสดง + ช่องไฟขวา 10
+// (กว้างขั้นต่ำ 94px, เพดาน 140px กันรูปแบนยาวมากเบียดคอลัมน์อื่น) คอลัมน์รูปต้องกว้างเท่ากันทุกการ์ดเพื่อให้ตรงกับหัวตาราง
+const IMG_H=95, IMG_W_MIN=94, IMG_W_MAX=140, IMG_PAD_L=15, IMG_PAD_R=5;
+const CARD_PAD_R=10; // ช่องไฟด้านขวาของคอลัมน์ขวาสุดถึงขอบการ์ด
+let IMG_COL=IMG_PAD_L+IMG_W_MIN+IMG_PAD_R;
+function setImgVars(){const st=document.documentElement.style; st.setProperty("--img-col",IMG_COL+"px"); st.setProperty("--img-h",IMG_H+"px"); st.setProperty("--img-pad-l",IMG_PAD_L+"px"); st.setProperty("--img-pad-r",IMG_PAD_R+"px"); st.setProperty("--card-pad-r",CARD_PAD_R+"px");}
+function updateImgCol(rows){
+  let w=IMG_W_MIN;
+  rows.forEach(x=>{const r=IMG_RATIO[x.imgId]; if(r&&IMAGES[x.imgId]) w=Math.max(w,Math.min(IMG_W_MAX,Math.ceil(r*IMG_H)));});
+  IMG_COL=IMG_PAD_L+w+IMG_PAD_R; setImgVars();
+}
+setImgVars();
+function gridSpec(){
+  const n=TERMS.length;
+  // คอลัมน์ที่เหลือ (ชื่อรุ่น/ราคา/ยอดจัด/ดาวน์/งวด) หดตามอัตราส่วนเดียวกัน เมื่อคอลัมน์รูปกว้างกว่าค่าอ้างอิง 104px
+  const CONTENT_W=750, IMG_BASE=104, k=(CONTENT_W-IMG_COL-CARD_PAD_R)/(CONTENT_W-IMG_BASE);
+  const r=x=>Math.round(x*k*10)/10;
+  const priceW=r(64), yodW=r(66), downW=r(n>=7?80:88);
+  const termW = r(n<=5?58 : n===6?54 : n===7?48 : 44);
+  return {
+    vgrid:`minmax(0,1fr) ${priceW}px ${yodW}px ${downW}px repeat(${n},${termW}px)`,
+    thgrid:`var(--img-col) minmax(0,1fr) ${priceW}px ${yodW}px ${downW}px repeat(${n},${termW}px)`,
+    nameW: CONTENT_W-IMG_COL-CARD_PAD_R-(priceW+yodW+downW+n*termW), // ความกว้างคอลัมน์ชื่อรุ่น
+    termFs: n<=5?13 : n===6?12 : 11,
+    headFs: n<=5?10.5 : n===6?10 : 9.3,
+  };
+}
+
+let ROWS=[], IMAGES={}, IMG_RATIO={}, brands=[], current="ALL", bgImage=null;
+const $=(id)=>document.getElementById(id);
+
+
+/* ===================== ระบบธีมสีการ์ด ===================== */
+// ชุดสีสำเร็จ: cardBg=พื้นการ์ด, ink=ตัวหนังสือ, theadBg=หัวตาราง
+// (ink/thead ที่ตั้งไว้เป็นค่าตั้งต้น ถ้าเปิด auto จะคำนวณสีให้อ่านออกเองอีกที)
+const THEME_PRESETS = [
+  {id:"white",  name:"ขาว",     cardBg:"#ffffff", ink:"#1a1d24", theadBg:"#1c3361"},
+  {id:"gray",   name:"เทา",     cardBg:"#e9edf2", ink:"#1a1d24", theadBg:"#374151"},
+  {id:"ink",    name:"ดำ",      cardBg:"#1e2228", ink:"#f2f4f8", theadBg:"#0b0e12"},
+  {id:"blue",   name:"ฟ้า",     cardBg:"#e6f0fb", ink:"#10243d", theadBg:"#1763ff"},
+  {id:"green",  name:"เขียว",   cardBg:"#e7f3ec", ink:"#123024", theadBg:"#0b7a4b"},
+  {id:"pink",   name:"ชมพู",    cardBg:"#f8e8eb", ink:"#1a1d24", theadBg:"#a41c35"},
+];
+
+// สถานะธีมปัจจุบัน (ค่าเริ่มต้น = ขาว)
+let THEME = {cardBg:"#ffffff", ink:"#1a1d24", theadBg:"#1c3361", auto:true, presetId:"white"};
+
+// ---- helper: อ่านค่าความสว่างเพื่อเลือกสีตัวหนังสือขาว/ดำ ----
+function hexToRgb(h){
+  h=h.replace("#","");
+  if(h.length===3) h=h.split("").map(c=>c+c).join("");
+  const n=parseInt(h,16);
+  return {r:(n>>16)&255, g:(n>>8)&255, b:n&255};
+}
+function luminance(hex){
+  const {r,g,b}=hexToRgb(hex);
+  const f=v=>{v/=255;return v<=0.03928? v/12.92 : Math.pow((v+0.055)/1.055,2.4);};
+  return 0.2126*f(r)+0.7152*f(g)+0.0722*f(b);
+}
+// สีตัวหนังสือที่คอนทราสต์กับพื้น (คืน #1a1d24 หรือ #ffffff)
+function readableInk(bgHex){ return luminance(bgHex) > 0.45 ? "#1a1d24" : "#ffffff"; }
+// ปรับสีให้อ่อน/เข้มลง เพื่อทำสีรอง
+function mix(hex, withHex, t){
+  const a=hexToRgb(hex), b=hexToRgb(withHex);
+  const m=(x,y)=>Math.round(x+(y-x)*t);
+  const to=v=>v.toString(16).padStart(2,"0");
+  return "#"+to(m(a.r,b.r))+to(m(a.g,b.g))+to(m(a.b,b.b));
+}
+
+// สร้างสตริง CSS ตัวแปรธีม สำหรับฝังใน .page แต่ละหน้า
+function themeVarsCSS(){
+  const cardBg = THEME.cardBg;
+  const ink    = THEME.auto ? readableInk(cardBg) : THEME.ink;
+  const soft   = mix(ink, cardBg, 0.42);                 // สีรอง จางลงเข้าหาพื้น
+  const accent = luminance(cardBg)>0.45 ? "#e0a800" : "#ffcf4d"; // สีเน้นเลขความจุ
+  const theadBg= THEME.theadBg;
+  const theadInk = THEME.auto ? readableInk(theadBg) : "#ffffff";
+  const divider = luminance(cardBg)>0.45 ? "rgba(0,0,0,.08)" : "rgba(255,255,255,.14)";
+  // ป้าย % เงินดาวน์: บนการ์ดสว่างใช้พื้นจาง/ตัวเข้ม, บนการ์ดมืดใช้พื้นสว่างจาง/ตัวสว่าง
+  const pillBg = luminance(cardBg)>0.45 ? mix(cardBg,"#000000",0.06) : mix(cardBg,"#ffffff",0.16);
+  const pillInk= ink;
+  return [
+    `--card-bg:${cardBg};`,
+    `--card-ink:${ink};`,
+    `--card-soft:${soft};`,
+    `--card-accent:${accent};`,
+    `--card-divider:${divider};`,
+    `--card-pill-bg:${pillBg};`,
+    `--card-pill-ink:${pillInk};`,
+    `--thead-bg:${theadBg};`,
+    `--thead-ink:${theadInk};`,
+  ].join("");
+}
+
+// ซิงก์ค่าใน color picker ให้ตรงกับ THEME
+function syncThemeInputs(){
+  const bg=$("cCardBg"), ink=$("cCardInk"), th=$("cTheadBg"), auto=$("autoInk");
+  if(bg) bg.value=THEME.cardBg;
+  if(th) th.value=THEME.theadBg;
+  if(auto) auto.checked=THEME.auto;
+  // ช่องสีตัวหนังสือ: ถ้า auto ให้โชว์สีที่คำนวณได้ และปิดใช้งาน
+  if(ink){
+    ink.value = THEME.auto ? readableInk(THEME.cardBg) : THEME.ink;
+    ink.disabled = THEME.auto;
+    ink.parentElement.style.opacity = THEME.auto ? .45 : 1;
+  }
+}
+
+function applyTheme(){ syncThemeInputs(); if(ROWS.length) render(); }
+
+function buildThemePresets(){
+  const wrap=$("themePresets"); if(!wrap) return;
+  wrap.innerHTML="";
+  THEME_PRESETS.forEach(p=>{
+    const b=document.createElement("button");
+    b.className="chip"+(p.id===THEME.presetId?" active":"");
+    b.innerHTML=`<span style="display:inline-block;width:11px;height:11px;border-radius:3px;background:${p.cardBg};border:1px solid rgba(255,255,255,.4);margin-right:5px;vertical-align:-1px"></span>${p.name}`;
+    b.onclick=()=>{
+      THEME={cardBg:p.cardBg, ink:p.ink, theadBg:p.theadBg, auto:$("autoInk").checked, presetId:p.id};
+      [...wrap.children].forEach(c=>c.classList.toggle("active",c===b));
+      applyTheme();
+    };
+    wrap.appendChild(b);
+  });
+}
+
+// ผูก event ให้ color picker + checkbox + reset
+function initThemeControls(){
+  buildThemePresets();
+  syncThemeInputs();
+  const clearActive=()=>{THEME.presetId=null;[...$("themePresets").children].forEach(c=>c.classList.remove("active"));};
+  $("cCardBg").addEventListener("input",e=>{THEME.cardBg=e.target.value;clearActive();applyTheme();});
+  $("cCardInk").addEventListener("input",e=>{THEME.ink=e.target.value;THEME.auto=false;$("autoInk").checked=false;clearActive();applyTheme();});
+  $("cTheadBg").addEventListener("input",e=>{THEME.theadBg=e.target.value;clearActive();applyTheme();});
+  $("autoInk").addEventListener("change",e=>{THEME.auto=e.target.checked; if(!THEME.auto) THEME.ink=readableInk(THEME.cardBg); applyTheme();});
+  $("themeReset").addEventListener("click",()=>{
+    THEME={cardBg:"#ffffff", ink:"#1a1d24", theadBg:"#1c3361", auto:true, presetId:"white"};
+    buildThemePresets(); applyTheme();
+  });
+}
+initThemeControls();
+/* =================== จบระบบธีมสีการ์ด =================== */
+
+/* ===================== เลือกชีต Vat / NoVat ===================== */
+// Vat   = ชีต 2 "Detail Price"
+// NoVat = ชีต 3 "Detail Price NoVat"
+const SHEET_NAMES={vat:"Detail Price", novat:"Detail Price NoVat", gaijin:"Gaijin Detail Price", gaijinnovat:"Gaijin Detail Price NoVat", promotion:"Promotion"};
+let WB=null, PRICE_MODE="vat";
+
+function getSheet(mode){
+  if(!WB) return null;
+  const S=WB.Sheets, N=WB.SheetNames;
+  if(mode==="promotion") return S[SHEET_NAMES.promotion] || null;
+  if(mode==="gaijinnovat") return S[SHEET_NAMES.gaijinnovat] || null;
+  if(mode==="gaijin") return S[SHEET_NAMES.gaijin] || null; // ไม่ fallback ตามลำดับชีต กันดึงผิดชีต
+  if(mode==="novat") return S[SHEET_NAMES.novat] || (N[2]?S[N[2]]:null);
+  return S[SHEET_NAMES.vat] || (N[1]?S[N[1]]:null) || S[N[0]];
+}
+function readRate(ws){
+  const c=ws&&ws["A1"];
+  return c&&typeof c.v==="number"?c.v:null;
+}
+function fmtRate(){ return +(INSTALLMENT_RATE*100).toFixed(4); } // กัน 1.1500000000000001
+function modeLabel(){ return PRICE_MODE==="novat"?"NoVat":PRICE_MODE==="gaijin"?"Gaijin":PRICE_MODE==="gaijinnovat"?"Gaijin NoVat":PRICE_MODE==="promotion"?"Promotion":"Vat"; }
+// ป้ายบนหัวตารางในโบรชัวร์: ชีต Gaijin ใช้สูตรแบบ Vat จึงแสดง "Vat" (เปลี่ยนเป็น "Gaijin" ได้ที่นี่)
+function pillLabel(){ return (PRICE_MODE==="novat"||PRICE_MODE==="gaijinnovat")?"NoVat":"Vat"; }
+function syncModeButtons(){
+  document.querySelectorAll("#vatToggle .chip").forEach(b=>b.classList.toggle("active",b.dataset.mode===PRICE_MODE));
+}
+
+// 4 เลย์เอาต์ตามแบบ AddedArtboard 1–4: ต่างกันแค่สีแถบหัวตาราง สีตัวอักษรสเปก และป้าย Vat/NoVat
+// แต่ละโหมดผูกกับธีมสีการ์ด: Vat=ฟ้า · NoVat=ดำ · AlienVat(Gaijin)=เขียว · AlienNoVat=ชมพู
+const LAYOUTS={
+  vat:        {preset:"blue",  spec:"#1763ff"},
+  novat:      {preset:"ink",   spec:"#b8c4d8"},
+  gaijin:     {preset:"green", spec:"#0b7a4b"},
+  gaijinnovat:{preset:"pink",  spec:"#a41c35"},
+  promotion:  {preset:"blue",  spec:"#1763ff"}
+};
+function applyLayout(mode){
+  const L=LAYOUTS[mode]||LAYOUTS.vat;
+  const p=THEME_PRESETS.find(x=>x.id===L.preset)||THEME_PRESETS[0];
+  THEME={cardBg:p.cardBg, ink:p.ink, theadBg:p.theadBg, auto:$("autoInk").checked, presetId:p.id};
+  const st=document.documentElement.style, dark=(p.id==="ink");
+  st.setProperty("--spec-ink",L.spec);
+  st.setProperty("--band-bg",dark?"rgba(255,255,255,.07)":"rgba(0,0,0,.055)");
+  st.setProperty("--sep-ink",dark?"rgba(255,255,255,.28)":"rgba(0,0,0,.18)");
+  syncThemeInputs();
+  [...document.querySelectorAll("#themePresets .chip")].forEach((c,n)=>c.classList.toggle("active",THEME_PRESETS[n]&&THEME_PRESETS[n].id===p.id));
+}
+function loadSheetData(mode, keepBrand){
+  applyLayout(mode);
+  DOWNS=DOWNS_SETS[mode]||DOWNS_SETS.vat;
+  const ws=getSheet(mode);
+  const rate=readRate(ws);
+  if(rate!=null) INSTALLMENT_RATE=rate;
+  else{ // ชีตนี้ไม่มีอัตราที่ A1 -> ใช้อัตราของชีต Vat แทน
+    const r2=readRate(getSheet("vat")); if(r2!=null) INSTALLMENT_RATE=r2;
+  }
+  const aoa=XLSX.utils.sheet_to_json(ws,{header:1,raw:true,defval:null});
+  if(mode==="promotion"){ // อ่าน "Down N%" จากแถวหัวตาราง (แถว 2) ให้ตรงกับชีตเสมอ
+    const found=[]; (aoa[1]||[]).forEach((c,i)=>{ const m=/^\s*down\s*(\d+(?:\.\d+)?)\s*%/i.exec(String(c||"")); if(m) found.push({pct:m[1]+"%",start:i}); });
+    DOWNS=found.length?found:DOWNS_SETS.promotion;
+  }
+  const body=aoa.slice(HEADER_ROWS).filter(r=>r&&String(r[0]||"").trim());
+  ROWS=body.map(r=>({
+    name:String(r[0]).trim(), price:r[1],
+    imgId:r[2]!=null?String(r[2]).trim():"",
+    insurance:r[3], priceIns:r[4], raw:r, brand:detectBrand(String(r[0]))
+  }));
+  const found=[...new Set(ROWS.map(x=>x.brand))];
+  brands=BRAND_ORDER.filter(b=>found.includes(b)).concat(found.filter(b=>!BRAND_ORDER.includes(b)));
+  // สลับ Vat/NoVat แล้วให้อยู่แบรนด์เดิมถ้ายังมีอยู่
+  current=(keepBrand&&(current==="ALL"||brands.includes(current)))?current:(brands[0]||"ALL");
+  buildFilters();
+  $("rateView").textContent=fmtRate()+"%";
+  $("status").textContent="["+modeLabel()+"] โหลด "+ROWS.length+" รุ่น · "+brands.length+" แบรนด์ · อัตรา "+fmtRate()+"%";
+  render();
+}
+
+function setMode(mode){
+  if(mode===PRICE_MODE) return;
+  if(WB && !getSheet(mode)){
+    $("status").textContent='ไม่พบชีต "'+SHEET_NAMES[mode]+'" ในไฟล์นี้';
+    return;
+  }
+  PRICE_MODE=mode;
+  syncModeButtons();
+  if(WB) loadSheetData(mode,true);
+}
+document.querySelectorAll("#vatToggle .chip").forEach(b=>b.addEventListener("click",()=>setMode(b.dataset.mode)));
+
+// รอฟอนต์โหลดครบทุกน้ำหนักก่อนวัดความสูงการ์ด (ไม่งั้นวัดด้วยฟอนต์สำรองแล้วตัดหน้าผิด)
+async function ensureFonts(){
+  try{ await Promise.all(["300","400","500","600","700","800"].map(w=>document.fonts.load(w+" 16px 'Noto Sans Thai'","กขA0"))); await document.fonts.ready; }catch(_){}
+}
+$("xlsxInput").addEventListener("change",async(e)=>{
+  const file=e.target.files[0]; if(!file) return;
+  $("status").textContent="กำลังอ่าน "+file.name+" …";
+  await ensureFonts();
+  const buf=await file.arrayBuffer();
+  WB=XLSX.read(buf,{type:"array"});
+  BG_SHEET_MAP=readBgMap(WB);
+  if(!getSheet(PRICE_MODE)){ // ไฟล์ไม่มีชีตของโหมดที่เลือกไว้ -> กลับไป Vat
+    PRICE_MODE="vat"; syncModeButtons();
+  }
+  loadSheetData(PRICE_MODE,false);
+  if(Object.keys(BG_FILES).length) $("status").textContent+=" · "+bgSummary();
+});
+
+// อ่านสัดส่วนจริงของรูปล่วงหน้า เพื่อให้วัดความสูงการ์ดได้ถูกต้องก่อนรูปโหลดเสร็จ (รูปไม่จำกัดความสูง จำกัดแค่ความกว้าง)
+function loadRatio(id,url){return new Promise(res=>{const im=new Image();
+  im.onload=()=>{if(im.naturalWidth&&im.naturalHeight)IMG_RATIO[id]=im.naturalWidth/im.naturalHeight;res();};
+  im.onerror=()=>res(); im.src=url;});}
+$("imgInput").addEventListener("change",async(e)=>{
+  Object.values(IMAGES).forEach(u=>URL.revokeObjectURL(u));
+  IMAGES={}; IMG_RATIO={};
+  [...e.target.files].forEach(f=>{
+    if(/\.(jpe?g|png|webp|gif|avif)$/i.test(f.name))
+      IMAGES[f.name.replace(/\.[^.]+$/,"").trim()]=URL.createObjectURL(f);
+  });
+  $("status").textContent="กำลังอ่านขนาดรูป...";
+  await ensureFonts();
+  await Promise.all(Object.entries(IMAGES).map(([id,u])=>loadRatio(id,u)));
+  $("status").textContent="โหลดรูป "+Object.keys(IMAGES).length+" ไฟล์"+(ROWS.length?(" · "+ROWS.length+" รุ่น"):"");
+  if(ROWS.length) render();
+});
+
+/* ============ พื้นหลังอัตโนมัติตามแบรนด์ ============ */
+// แบรนด์ -> รหัสท้ายชื่อไฟล์ (AddedArtboard <รหัส>) ตามตาราง Brand / File Name  แก้/เพิ่มได้ที่นี่
+const BG_CODES={honor:"3am2",huawei:"4am2",infinix:"6am2",nubia:"7am2",realme:"5am2",samsung:"2am2",
+  tecno:"1am2",redmi:"8am2",xiaomi:"9am2",oppo:"10am2",vivo:"11am2",iqoo:"12am2"};
+let BG_FILES={}; // ชื่อไฟล์ (ตัดนามสกุล/เว้นวรรค/ตัวพิมพ์) -> blob url
+let BG_TEMPLATE=null; // พื้นหลังกลางไฟล์เดียว "Lay-Out-Template" ใช้กับทุกแบรนด์
+let LOGOS={};         // แบรนด์ (ตัวพิมพ์เล็ก) -> url ไฟล์ <แบรนด์>-logo.png
+const bgNorm=t=>String(t).replace(/\.[^.]+$/,"").toLowerCase().replace(/[\s_\-]+/g,"");
+function setBgFiles(files){
+  Object.values(BG_FILES).forEach(u=>URL.revokeObjectURL(u));
+  BG_FILES={}; LOGOS={}; BG_TEMPLATE=null;
+  [...files].forEach(f=>{
+    if(!/\.(png|jpe?g|webp|avif)$/i.test(f.name)) return;
+    const url=URL.createObjectURL(f), st=bgNorm(f.name);
+    if(st==="layouttemplate") BG_TEMPLATE=url;                 // Lay-Out-Template
+    else if(/.+logo$/.test(st)) LOGOS[st.slice(0,-4)]=url;      // honor-logo -> honor
+    else BG_FILES[st]=url;
+  });
+}
+// อ่านตาราง Brand / File Name จาก Excel (หาทุกชีต: เซลล์หัว "Brand" ที่มี "File Name" อยู่ถัดไปทางขวา)
+// ชื่อไฟล์ถ้าถูกแยกไปอยู่เซลล์ถัดไป (เช่น "AddedArtboard" | "5Layout") จะต่อกันให้
+let BG_SHEET_MAP={};
+const bgKey=b=>String(b).toLowerCase().replace(/[^a-z0-9]/g,"");
+function readBgMap(wb){
+  const map={};
+  wb.SheetNames.forEach(n=>{
+    const aoa=XLSX.utils.sheet_to_json(wb.Sheets[n],{header:1,defval:""});
+    for(let r=0;r<aoa.length;r++){
+      const row=aoa[r]||[];
+      for(let c=0;c<row.length-1;c++){
+        if(String(row[c]).trim().toLowerCase()==="brand" && /^file\s*name$/i.test(String(row[c+1]).trim())){
+          const headExtra=String(row[c+2]||"").trim();
+          for(let i=r+1;i<aoa.length;i++){
+            const b=String((aoa[i]||[])[c]||"").trim(); if(!b) break;
+            let fn=String(aoa[i][c+1]||"").trim();
+            const extra=String(aoa[i][c+2]||"").trim();
+            if(extra&&!headExtra) fn+=" "+extra;
+            if(fn) map[bgKey(b)]=fn;
+          }
+        }
+      }
+    }
+  });
+  return map;
+}
+function bgWanted(brand){ return BG_SHEET_MAP[bgKey(brand)]||null; }
+function bgForBrand(brand){
+  if(BG_TEMPLATE) return BG_TEMPLATE; // มีไฟล์พื้นหลังกลาง -> ใช้ไฟล์เดียวกับทุกแบรนด์
+  if(!brand||!Object.keys(BG_FILES).length) return null;
+  const key=bgKey(brand);
+  const wanted=BG_SHEET_MAP[key];
+  if(wanted) return BG_FILES[bgNorm(wanted)]||null; // Excel ระบุชื่อไฟล์ไว้ -> ใช้เฉพาะไฟล์นั้น (ไม่หาไฟล์อื่นแทน กันได้พื้นหลังเก่าผิดแบรนด์)
+  const code=BG_CODES[key];
+  const stems=Object.keys(BG_FILES);
+  if(code){
+    const hit=BG_FILES["addedartboard"+code]||BG_FILES[stems.find(t=>t.endsWith(code)&&!/[0-9]/.test(t.charAt(t.length-code.length-1)||"x"))];
+    if(hit) return hit;
+  }
+  return BG_FILES[key]||null; // สำรอง: ไฟล์ชื่อเดียวกับแบรนด์ เช่น vivo.png
+}
+
+function bgSummary(){
+  if(BG_TEMPLATE) return "พื้นหลัง Lay-Out-Template · โลโก้ "+Object.keys(LOGOS).length+" แบรนด์";
+  const names=[...new Set(ROWS.map(r=>r.brand))];
+  const ok=names.filter(b=>bgForBrand(b)), miss=names.filter(b=>!bgForBrand(b));
+  return "พื้นหลัง "+Object.keys(BG_FILES).length+" ไฟล์"+(ROWS.length?(" · จับคู่ได้ "+ok.length+" แบรนด์"+(miss.length?(" · ไม่พบไฟล์: "+miss.map(b=>b+(bgWanted(b)?" ("+bgWanted(b)+")":"")).join(", ")):"")):"");
+}
+$("bgDirInput").addEventListener("change",(e)=>{
+  setBgFiles(e.target.files);
+  $("status").textContent=bgSummary();
+  if(ROWS.length) render();
+});
+
+$("bgInput").addEventListener("change",(e)=>{
+  const file=e.target.files[0]; if(!file) return;
+  if(bgImage) URL.revokeObjectURL(bgImage);
+  bgImage=URL.createObjectURL(file);
+  $("bgClear").style.display="inline-flex";
+  render();
+});
+$("bgClear").addEventListener("click",()=>{
+  if(bgImage) URL.revokeObjectURL(bgImage);
+  bgImage=null;
+  $("bgInput").value="";
+  $("bgClear").style.display="none";
+  render();
+});
+
+function detectBrand(name){
+  const n=name.trim();
+  for(const b of BRAND_ORDER) if(n.toLowerCase().startsWith(b.toLowerCase())) return b;
+  return (n.split(/\s+/)[0]||"อื่นๆ");
+}
+function fmt(v){
+  if(v===null||v===undefined||v==="") return "";
+  const s=String(v).trim();
+  if(s==="-") return "–";
+  const n=Number(s.replace(/[^\d.-]/g,""));
+  return isNaN(n)?s:n.toLocaleString("th-TH");
+}
+function baseName(full){return full.replace(/\s+\d+\s*\/\s*\d+\s*(GB|TB)?.*$/i,"").trim();}
+function tailKey(full){const m=/\s+\d+\s*\/\s*\d+\s*(?:GB|TB)?(.*)$/i.exec(full);return m?m[1].trim().toLowerCase().replace(/\s+/g," "):"";}
+function specPart(full){const b=baseName(full);return full.slice(b.length).trim();}
+function isComplete(x){
+  // ปรับให้แสดงทุกรุ่นที่มีชื่อ+ราคา ไม่ข้ามรุ่นที่บางคอลัมป์ว่างหรือเป็น "-"
+  return x.price!=null&&x.price!=="";
+}
+
+function buildFilters(){
+  const mk=(label,val)=>{const b=document.createElement("button");
+    b.className="chip"+(val===current?" active":"");b.textContent=label;
+    b.onclick=()=>{current=val;[...$("filters").children].forEach(c=>c.classList.toggle("active",c===b));render();};
+    return b;};
+  const f=$("filters");f.innerHTML="";
+  f.appendChild(mk("ทั้งหมด","ALL"));
+  brands.forEach(b=>f.appendChild(mk(b,b)));
+  const sel=$("brandSel"); // เมนูเลือกแบรนด์บนหัวหน้าเว็บ (ใช้ตัวแปร current เดียวกับปุ่มกรอง)
+  sel.innerHTML=""; [["ทั้งหมด","ALL"],...brands.map(b=>[b,b])].forEach(([t,v])=>{const o=document.createElement("option");o.value=v;o.textContent=t;sel.appendChild(o);});
+  sel.value=current;
+}
+$("brandSel").addEventListener("change",e=>{ if(!e.target.value) return; current=e.target.value;
+  [...$("filters").children].forEach(c=>c.classList.toggle("active",c.textContent===(current==="ALL"?"ทั้งหมด":current))); render(); });
+
+// ย่อฟอนต์ชื่อรุ่นเฉพาะคำที่ยาวเกินคอลัมน์ (เช่น LAMBORGHINI) เพื่อไม่ให้ดันคอลัมน์อื่นเลื่อน
+const NAME_FS=20, NAME_FS_MIN=13; // NAME_FS = ขนาดสูงสุดของชื่อรุ่น (px)
+let _cv=null; try{ _cv=document.createElement("canvas").getContext("2d"); }catch(_){}
+function textW(w,fs){ try{ if(_cv){ _cv.font=`500 ${fs}px "Noto Sans Thai", sans-serif`; return _cv.measureText(w).width; } }catch(_){} return w.length*fs*0.66; }
+function fitNameFs(name){
+  const avail=gridSpec().nameW-9-12-2; // หัก padding ซ้าย/ขวาของช่องชื่อ และเส้นคั่น
+  const wmax=Math.max(0,...String(name).split(/\s+/).map(w=>textW(w,NAME_FS)));
+  return wmax<=avail ? NAME_FS : Math.max(NAME_FS_MIN, Math.floor(NAME_FS*avail/wmax*10)/10);
+}
+function variantRow(x){
+  const spec=specPart(x.name);
+  const short=baseName(x.name).replace(new RegExp("^"+x.brand+"\\s*","i"),"");
+  let yod=`<div class="v-cell yod">`; DOWNS.forEach(d=>yod+=`<div>${fmt(x.raw[d.start+1])}</div>`); yod+=`</div>`;
+  let down=`<div class="v-cell down">`; DOWNS.forEach(d=>down+=`<div class="drow"><span class="dp">${d.pct}</span><span class="dv">${fmt(x.raw[d.start])}</span></div>`); down+=`</div>`;
+  let terms=""; TERMS.forEach(t=>{let c=`<div class="v-cell term">`;DOWNS.forEach(d=>c+=`<div class="tv">${fmt(x.raw[d.start+t.o])}</div>`);c+=`</div>`;terms+=c;});
+  return `<div class="variant">
+    <div class="v-name"><div class="brand">${x.brand}</div><div class="n"${(()=>{const fs=fitNameFs(short||x.brand);return fs<NAME_FS?` style="font-size:${fs}px"`:"";})()}>${short||x.brand}</div>${spec?`<div class="spec">${spec}</div>`:""}</div>
+    <div class="v-price">${fmt(x.price)}</div>${yod}${down}${terms}
+  </div>`;
+}
+function cardHTML(group){
+  const first=group[0];
+  const img=IMAGES[first.imgId];
+  const thumb=img?`<div class="thumb"><img src="${img}" alt=""></div>`
+    :`<div class="ph">${first.imgId?("รูป "+first.imgId+"<br>ไม่พบไฟล์"):"ไม่มีรูป"}</div>`;
+  const G=gridSpec();
+  return `<div class="card" style="--vgrid:${G.vgrid};--term-fs:${G.termFs}px">
+    <div class="cimg">${thumb}</div>
+    <div class="variants">${group.map(variantRow).join("")}</div>
+  </div>`;
+}
+
+// แก้ไข % ที่บรรทัดนี้
+// โลโก้แบรนด์มุมขวาบน: ตามแบรนด์ที่เลือกในเมนู (ถ้าเลือก "ทั้งหมด" ใช้แบรนด์ของการ์ดแรกในหน้านั้น)
+function logoImgHTML(pageBrand){
+  const b=(current&&current!=="ALL")?current:pageBrand;
+  const u=b&&LOGOS[bgKey(b)];
+  return u?`<img class="brand-logo" src="${u}" alt="${b}">`:"";
+}
+function pageHTML(cardsHTML, updStr, lineH, brand){
+  const bgUrl = bgImage || bgForBrand(brand); // ไฟล์ที่เลือกเองมาก่อน ไม่งั้นจับคู่ตามแบรนด์
+  const bgStyle = bgUrl ? `--bg-img:url('${bgUrl}');` : "";
+  const lineHStyle = lineH ? `--line-h:${lineH.toFixed(2)}px;` : "";
+  const themeStyle = themeVarsCSS();
+  const G=gridSpec();
+  return `<div class="page" style="${bgStyle}${lineHStyle}${themeStyle}--head-ink:#1a1d24;--grid:${G.thgrid};--term-fs:${G.termFs}px;--head-fs:${G.headFs}px">
+    <div class="head">
+      <div class="shop">&nbsp;</div>
+      <div class="brandname">&nbsp;</div>
+    </div>
+    ${logoImgHTML(brand)}
+    <div class="thead">
+      <div class="badges"><span class="pill tax ${pillLabel()==="NoVat"?"novat":"vat"}">${pillLabel()}</span><span class="pill">*${fmtRate()}%</span><span class="pill ins">ประกันอุบัติเหตุ</span></div>
+      <div></div><div>ราคา</div><div>ยอดจัด</div><div>ดาวน์</div>
+      ${TERMS.map(t=>`<div>${t.l}</div>`).join("")}
+    </div>
+    <div class="cards">${cardsHTML}</div>
+    <div class="foot">
+      <div class="cond">&nbsp;</div>
+      <div class="upd">&nbsp;</div>
+    </div>
+  </div>`;
+}
+
+// วัดความสูงการ์ดจริงในกล่องซ่อน
+function measureCard(html){
+  const m=$("measure");
+  m.innerHTML=html;
+  const el=m.firstElementChild;
+  const h=el.getBoundingClientRect().height;
+  m.innerHTML="";
+  return h;
+}
+
+// ตั้งค่า --line-h ชั่วคราวในกล่องวัด (ไม่กระทบ :root จริง)
+function setMeasureLineH(px){ $("measure").style.setProperty("--line-h", px+"px"); }
+
+// รวมความสูงของการ์ดทั้งหมดในหน้า ณ ค่า line-h ที่กำหนด
+function pageCardsHeightAt(cardHtmls, lineH){
+  setMeasureLineH(lineH);
+  let total=0;
+  cardHtmls.forEach(html=>{ total+=measureCard(html)+GAP; });
+  return total;
+}
+
+// หาค่า line-h ที่มากที่สุดเท่าที่จะยืดได้ โดยยังคงพอดีกับพื้นที่หน้า (ไม่ล้น)
+// lo เริ่มที่ LINE_H_MIN เสมอ เพราะการจัดหน้า (packing) การันตีไว้แล้วว่าพอดีที่ค่านี้
+function findLineH(cardHtmls){
+  let lineH;
+  if(pageCardsHeightAt(cardHtmls, LINE_H_MAX) <= CONTENT_H){
+    lineH = LINE_H_MAX; // การ์ดน้อย ยืดเต็มเพดานก็ยังพอดี
+  }else{
+    let lo=LINE_H_MIN, hi=LINE_H_MAX;
+    for(let i=0;i<8;i++){
+      const mid=(lo+hi)/2;
+      if(pageCardsHeightAt(cardHtmls, mid) <= CONTENT_H) lo=mid; else hi=mid;
+    }
+    lineH = lo;
+  }
+  setMeasureLineH(LINE_H_MIN); // รีเซ็ตกล่องวัดกลับค่าเริ่มต้น ก่อนไปวัดของแบรนด์/หน้าอื่นต่อ
+  return lineH;
+}
+
+// ===== โหมดเว็บ: โหลดรูป/พื้นหลังจากโฟลเดอร์ img/ และ bg/ เอง =====
+let AUTO=false;           // true เมื่อโหลด data/pricelist.xlsx สำเร็จ
+const ASSET_EXT=["png","jpg","jpeg","webp"], TRIED_IMG={}, TRIED_BG={};
+const probeImg=url=>new Promise(res=>{const im=new Image();im.onload=()=>res(im.naturalWidth&&im.naturalHeight?im.naturalWidth/im.naturalHeight:1);im.onerror=()=>res(0);im.src=url;});
+async function resolveImg(id){
+  TRIED_IMG[id]=1;
+  for(const ext of ASSET_EXT){const u=`img/${id}.${ext}`;const r=await probeImg(u); if(r){IMAGES[id]=u;IMG_RATIO[id]=r;return;}}
+}
+async function resolveBg(brand){
+  const key=bgKey(brand); TRIED_BG[key]=1;
+  const wanted=BG_SHEET_MAP[key];
+  const names=wanted?[...new Set([wanted,wanted.replace(/\s+/g,"_"),wanted.replace(/\s+/g,"")])]:[brand,String(brand).toLowerCase()];
+  for(const n of names) for(const ext of ASSET_EXT){const u=`bg/${n}.${ext}`;
+    if(await probeImg(u)){ BG_FILES[wanted?bgNorm(wanted):key]=encodeURI(u); return; }}
+}
+let TRIED_TPL=false; const TRIED_LOGO={}, LOGO_DIR="logo/";
+async function resolveTemplate(){ // ไฟล์พื้นหลังกลาง: bg/ หรือโฟลเดอร์หลัก ชื่อ Lay-Out-Template (.png/.jpg/.webp)
+  TRIED_TPL=true;
+  const names=["Lay-Out-Template","Lay Out Template","Lay_Out_Template","LayOutTemplate"], cands=[];
+  for(const dir of ["bg/",""]) for(const n of names) for(const ext of ASSET_EXT) cands.push(dir+n+"."+ext);
+  const res=await Promise.all(cands.map(probeImg)); const k=res.findIndex(r=>r);
+  if(k>=0) BG_TEMPLATE=encodeURI(cands[k]);
+}
+async function resolveLogo(brand){ // logo/<แบรนด์>-logo.png เช่น logo/samsung-logo.png
+  const key=bgKey(brand); TRIED_LOGO[key]=1;
+  const cands=ASSET_EXT.map(ext=>`${LOGO_DIR}${key}-logo.${ext}`);
+  const res=await Promise.all(cands.map(probeImg)); const k=res.findIndex(r=>r);
+  if(k>=0) LOGOS[key]=cands[k];
+}
+let _rt=0;
+async function prepareAssets(){
+  if(!AUTO) return;
+  const list=current==="ALL"?ROWS:ROWS.filter(x=>x.brand===current);
+  const ids=[...new Set(list.map(x=>x.imgId).filter(Boolean))].filter(id=>!TRIED_IMG[id]);
+  if(!TRIED_TPL) await resolveTemplate();
+  const allBr=[...new Set(list.map(x=>x.brand))];
+  const brs=BG_TEMPLATE?[]:allBr.filter(b=>!TRIED_BG[bgKey(b)]);
+  const logoBr=(current==="ALL"?allBr:[current]).filter(b=>!TRIED_LOGO[bgKey(b)]);
+  const prev=$("status").textContent;
+  if(ids.length||brs.length||logoBr.length) $("status").textContent="กำลังโหลดรูป "+ids.length+" รูป…";
+  await Promise.all([...ids.map(resolveImg),...brs.map(resolveBg),...logoBr.map(resolveLogo)]);
+  $("status").textContent=prev; // คืนข้อความสรุปเดิม
+}
+async function render(){ // โหมดเว็บ: เตรียมรูป/พื้นหลังให้เสร็จก่อนจัดหน้า (กันวัดความสูงผิด)
+  const t=++_rt; await prepareAssets(); if(t===_rt) renderNow();
+}
+function renderNow(){
+  $("intro").style.display="none";
+  $("printBtn").style.display="inline-flex";
+  const out=$("output");
+  let list=current==="ALL"?ROWS:ROWS.filter(x=>x.brand===current);
+  const complete=list.filter(isComplete);
+  updateImgCol(complete); // ปรับความกว้างคอลัมน์รูปตามรูปที่กว้างที่สุด ก่อนสร้างการ์ด/วัดความสูง
+  const skipped=list.length-complete.length;
+  if(!complete.length){out.innerHTML=`<div class="page"><div class="empty">ยังไม่มีรุ่นที่ข้อมูลครบ</div></div>`;return;}
+
+  const now=new Date();
+  const updStr=String(now.getFullYear()).slice(2)+String(now.getMonth()+1).padStart(2,"0")+String(now.getDate()).padStart(2,"0")+"-1";
+
+  // รวมทุกแบรนด์เป็นชุดเดียว ไม่ตัดขึ้นหน้าใหม่ตามแบรนด์แล้ว (บรรจุต่อเนื่องเต็มหน้าตามลำดับในชีต)
+  // จับกลุ่มรุ่นเดียวกัน (กันชื่อรุ่นซ้ำข้ามแบรนด์ด้วยการรวม brand เข้าไปใน key)
+  const groups=[]; const idx={};
+  complete.forEach(x=>{
+    // รุ่นเดียวกัน+ส่วนต่อท้ายเดียวกัน (เช่น "& OPPO Enco Air 5", "Photographer Kit") ถึงจะรวมการ์ดเดียวกัน
+    const k=x.brand+"|"+baseName(x.name)+"|"+tailKey(x.name);
+    if(idx[k]==null){idx[k]=groups.length;groups.push([]);}
+    groups[idx[k]].push(x);
+  });
+
+  // สร้าง html + วัดความสูงแต่ละการ์ด
+  const cards=groups.map(g=>{const html=cardHTML(g);return {html, h:measureCard(html), brand:g[0].brand};});
+
+  // จัดลงหน้า: ไล่หยอด พอเกิน CONTENT_H เปิดหน้าใหม่ (ไม่สนแบรนด์ ไหลต่อเนื่อง)
+  let pages=[[]], pageBrands=[null], used=0;
+  cards.forEach(c=>{
+    const add=c.h+GAP;
+    if(used+add>CONTENT_H && pages[pages.length-1].length>0){
+      pages.push([]); pageBrands.push(null); used=0;
+    }
+    if(pageBrands[pages.length-1]==null) pageBrands[pages.length-1]=c.brand;
+    pages[pages.length-1].push(c.html);
+    used+=add;
+  });
+
+  let allPages="";
+  pages.forEach((p,pi)=>{
+    const lineH=findLineH(p); // หา --line-h ที่ยืดพอดีเต็มหน้า A4 สำหรับหน้านี้โดยเฉพาะ
+    allPages+=pageHTML(p.join(""), updStr, lineH, pageBrands[pi]);
+  });
+
+  out.innerHTML=allPages;
+  if(skipped>0) $("status").textContent="แสดง "+complete.length+" รุ่น · ข้าม "+skipped+" รุ่นที่ข้อมูลไม่ครบ";
+}
+applyLayout(PRICE_MODE); // เริ่มต้นด้วยเลย์เอาต์ของโหมดปัจจุบัน (Vat = แถบสีน้ำเงิน)
+
+async function autoLoad(){
+  if(location.protocol==="file:"){ $("legacy").hidden=false; $("status").textContent="เปิดจากไฟล์ในเครื่อง: เลือกไฟล์ด้านล่างเอง (หรือเปิดผ่านเว็บ GitHub Pages เพื่อโหลดอัตโนมัติ)"; return; }
+  try{
+    await ensureFonts();
+    const res=await fetch("data/pricelist.xlsx",{cache:"no-cache"});
+    if(!res.ok) throw new Error("HTTP "+res.status);
+    WB=XLSX.read(new Uint8Array(await res.arrayBuffer()),{type:"array"});
+    BG_SHEET_MAP=readBgMap(WB);
+    AUTO=true;
+    loadSheetData(PRICE_MODE,false);
+  }catch(err){
+    $("legacy").hidden=false;
+    $("status").textContent="โหลด data/pricelist.xlsx ไม่สำเร็จ ("+err.message+") · เลือกไฟล์เองด้านล่างได้";
+  }
+}
+autoLoad();
+</script>
+</body>
+</html>
