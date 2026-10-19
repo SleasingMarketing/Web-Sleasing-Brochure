@@ -321,6 +321,7 @@ const THEME_PRESETS = [
   {id:"white",  name:"ขาว",     cardBg:"#ffffff", ink:"#1a1d24", theadBg:"#1c3361"},
   {id:"gray",   name:"เทา",     cardBg:"#e9edf2", ink:"#1a1d24", theadBg:"#374151"},
   {id:"ink",    name:"ดำ",      cardBg:"#1e2228", ink:"#f2f4f8", theadBg:"#0b0e12"},
+  {id:"novat",  name:"เทาเงิน", cardBg:"#e6e7e8", ink:"#1a1d24", theadBg:"#0b0e12"}, // การ์ดโหมด NoVat
   {id:"blue",   name:"ฟ้า",     cardBg:"#e6f0fb", ink:"#10243d", theadBg:"#1763ff"},
   {id:"green",  name:"เขียว",   cardBg:"#e7f3ec", ink:"#123024", theadBg:"#0b7a4b"},
   {id:"pink",   name:"ชมพู",    cardBg:"#f8e8eb", ink:"#1a1d24", theadBg:"#a41c35"},
@@ -456,7 +457,7 @@ function syncModeButtons(){
 // แต่ละโหมดผูกกับธีมสีการ์ด: Vat=ฟ้า · NoVat=ดำ · AlienVat(Gaijin)=เขียว · AlienNoVat=ชมพู
 const LAYOUTS={
   vat:        {preset:"blue",  spec:"#1763ff"},
-  novat:      {preset:"ink",   spec:"#b8c4d8"},
+  novat:      {preset:"novat", spec:"#5b6678"},
   gaijin:     {preset:"green", spec:"#0b7a4b"},
   gaijinnovat:{preset:"pink",  spec:"#a41c35"},
   promotion:  {preset:"blue",  spec:"#1763ff"}
