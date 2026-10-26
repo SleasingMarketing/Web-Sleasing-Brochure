@@ -76,7 +76,7 @@
   .thead .badges{display:flex;gap:5px;justify-content:flex-start;padding-left:10px;align-items:center}
   .thead .badges::before{display:none}
   .thead .badges.ld{padding-left:6px;gap:4px}
-  .thead .ld-logo{height:16px;width:auto;display:block;flex:0 0 auto} /* ขนาดโลโก้ LockDown ปรับที่ height */
+  .thead .ld-logo{height:20px;width:auto;display:block;flex:0 0 auto} /* ขนาดโลโก้ LockDown ปรับที่ height */
   .pill{background:#ff5630;color:#fff;font-size:10px;font-weight:700;padding:2px 8px;border-radius:999px;white-space:nowrap}
   .pill.tax{background:transparent;color:var(--thead-ink,#fff);border:1.5px solid var(--thead-ink,#fff)}
   .pill.ins{background:var(--thead-ink,#fff);color:var(--thead-bg);border:1.5px solid var(--thead-ink,#fff)}
@@ -778,7 +778,7 @@ function pageHTML(cardsHTML, updStr, lineH, brand){
     </div>
     ${logoImgHTML(brand)}
     <div class="thead">
-      <div class="badges${PRICE_MODE==="lockdown"?" ld":""}">${PRICE_MODE==="lockdown"?`<img class="ld-logo" src="${LOCKDOWN_LOGO}" alt="LockDown">`:""}<span class="pill tax ${pillLabel()==="NoVat"?"novat":"vat"}">${pillLabel()}</span><span class="pill">*${fmtRate()}%</span><span class="pill ins">ประกันอุบัติเหตุ</span></div>
+      <div class="badges${PRICE_MODE==="lockdown"?" ld":""}">${PRICE_MODE==="lockdown"?`<img class="ld-logo" src="${LOCKDOWN_LOGO}" alt="LockDown">`:""}<span class="pill tax ${pillLabel()==="NoVat"?"novat":"vat"}">${pillLabel()}</span><span class="pill">*${fmtRate()}%</span><span class="pill ins">รวมประกัน</span></div>
       <div></div><div>ราคา</div><div>ยอดจัด</div><div>ดาวน์</div>
       ${TERMS.map(t=>`<div>${t.l}</div>`).join("")}
     </div>
