@@ -500,7 +500,9 @@ function loadSheetData(mode, keepBrand){
   else{ // ชีตนี้ไม่มีอัตราที่ A1 -> ใช้อัตราของชีต Vat แทน
     const r2=readRate(getSheet("vat")); if(r2!=null) INSTALLMENT_RATE=r2;
   }
-  const aoa=XLSX.utils.sheet_to_json(ws,{header:1,raw:true,defval:null});
+  // ล็อกจุดเริ่มอ่านที่ A1 เสมอ: ถ้าแถว 1 ว่าง (เช่นไม่มีอัตราที่ A1) SheetJS จะเริ่มนับจากแถวแรกที่มีข้อมูล ทำให้ข้ามแถวข้อมูลแถวแรก (แถว 3) ไป
+  const rg=XLSX.utils.decode_range(ws["!ref"]||"A1:A1"); rg.s.r=0; rg.s.c=0;
+  const aoa=XLSX.utils.sheet_to_json(ws,{header:1,raw:true,defval:null,range:rg});
   if(mode==="lockdown"){ // เก็บเฉพาะ 5/10/15%: ใช้ตำแหน่งจากหัวคอลัมน์ "Down N%" ถ้าเจอ ไม่เจอใช้ตำแหน่งมาตรฐาน
     const want=[5,10,15], pos={};
     (aoa[1]||[]).forEach((c,i)=>{ const m=/^\s*down\s*(\d+(?:\.\d+)?)\s*%/i.exec(String(c||"")); if(m){ const v=+m[1]; if(want.includes(v)&&pos[v]==null) pos[v]=i; } });
