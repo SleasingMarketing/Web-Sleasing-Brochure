@@ -176,9 +176,10 @@
   .hdr .modes .chip{background:var(--c);color:#fff;border:0;border-radius:999px;padding:6px 18px;font-size:15px;font-weight:600;opacity:.4;font-family:inherit}
   .hdr .modes .chip:hover{opacity:.75;color:#fff}
   .hdr .modes .chip.active{opacity:1;box-shadow:0 0 0 2px #fff,0 0 0 4px var(--c)}
-  .hdr .modes .chip[data-mode="lockdown"]{color:#4b5563;opacity:.85}
-  .hdr .modes .chip[data-mode="lockdown"]:hover{color:#374151;opacity:1}
-  .hdr .modes .chip[data-mode="lockdown"].active{opacity:1}
+  .hdr .modes .chip[data-mode="lockdown"],.hdr .modes .chip[data-mode="lockdownnew"]{color:#4b5563;opacity:.85}
+  .hdr .modes .chip[data-mode="lockdown"]:hover,.hdr .modes .chip[data-mode="lockdownnew"]:hover{color:#374151;opacity:1}
+  .hdr .modes .chip[data-mode="lockdown"].active,.hdr .modes .chip[data-mode="lockdownnew"].active{opacity:1}
+  .hdr .modes .chip[data-mode="lockdownnew"]{white-space:nowrap;padding-left:12px;padding-right:12px}
   .hbtn{cursor:pointer;background:#1763ff;color:#fff;border-color:#1763ff;font-family:inherit}
   .hbtn:hover{background:#0f4fd1}
   .hbtn.alt{background:#fff;color:#1763ff}
@@ -207,6 +208,7 @@
       <button class="chip" data-mode="gaijin" style="--c:#1b6b3a">AlienVat</button>
       <button class="chip" data-mode="gaijinnovat" style="--c:#a41c35">AlienNoVat</button>
       <button class="chip" data-mode="lockdown" style="--c:#d1d5db">LockDown</button>
+      <button class="chip" data-mode="lockdownnew" style="--c:#d1d5db">LockDown (new)</button>
     </div>
   </div>
   <div class="hrow" id="ldRow" style="display:none"><span class="hl">ไฟล์โปร:</span><label class="hpill hbtn alt" style="cursor:pointer">📂 เลือกไฟล์ LockDown (.xlsx)<input type="file" id="ldInput" accept=".xlsx,.xls" hidden></label><span class="hstatus" id="ldName" style="margin:0"></span></div>
@@ -267,6 +269,8 @@ const DOWNS_SETS={
   promotion:[{pct:"5%",start:5},{pct:"10%",start:14},{pct:"15%",start:23}],
   // LockDown: มีเงินดาวน์แค่ 5/10/15% เท่านั้น (ตำแหน่งคอลัมน์มาตรฐาน; ถ้าหัวคอลัมน์ "Down N%" อยู่ที่อื่นจะใช้ตำแหน่งตามหัวคอลัมน์)
   lockdown:[{pct:"5%",start:5},{pct:"10%",start:14},{pct:"15%",start:23}],
+  // LockDown (new): ดาวน์ 2 ระดับ 0% / 10% (ตำแหน่งสำรอง = ก้อนที่ 1 และ 2 ของชีต)
+  lockdownnew:[{pct:"0%",start:5},{pct:"10%",start:14}],
   gaijinnovat:[{pct:"20%",start:5},{pct:"25%",start:14},{pct:"30%",start:23},{pct:"35%",start:32},{pct:"40%",start:41}],
 };
 let DOWNS=DOWNS_SETS.vat;
@@ -439,13 +443,18 @@ initThemeControls();
 // Vat   = ชีต 2 "Detail Price"
 // NoVat = ชีต 3 "Detail Price NoVat"
 const SHEET_NAMES={vat:"Detail Price", novat:"Detail Price NoVat", gaijin:"Gaijin Detail Price", gaijinnovat:"Gaijin Detail Price NoVat", promotion:"Promotion"};
+const isLD=m=>m==="lockdown"||m==="lockdownnew"; // โหมดตระกูล LockDown (ใช้ธีม/โลโก้/ปุ่มเลือกไฟล์ร่วมกัน)
+const LDNEW_SHEET="LockDown New"; // ชื่อแท็บของ LockDown (new) ในไฟล์ราคาหลัก / Google Sheet
 let WB=null, PRICE_MODE="vat", LD_WB=null; // LD_WB = ไฟล์ LockDown ที่เลือกจากภายนอก
 
 function findSheet(wb,re){ if(!wb) return null; const n=wb.SheetNames.find(x=>re.test(x)); return n?wb.Sheets[n]:null; }
 function getSheet(mode){
-  if(mode==="lockdown"){ // LockDown ใช้ชีตชื่อ "Promotion" (ไม่เจอลองหาชื่อ LockDown) จากไฟล์ที่เลือกเอง · ถ้าไม่ได้เลือกไฟล์ ใช้จากไฟล์ราคาหลัก
+  if(mode==="lockdown"){ // LockDown (เดิม) ใช้ชีตชื่อ "Promotion" (ไม่เจอลองหาชื่อ LockDown) จากไฟล์ที่เลือกเอง · ถ้าไม่ได้เลือกไฟล์ ใช้จากไฟล์ราคาหลัก
     const src=LD_WB||WB; // ไม่เอาชีตแรกมาแทน เพราะในไฟล์นี้ชีตแรกคือ Product Price
-    return findSheet(src,/^\s*promotion\s*$/i) || findSheet(src,/lock\s*down/i);
+    return findSheet(src,/^\s*promotion\s*$/i) || findSheet(src,/lock\s*down(?!.*new)/i);
+  }
+  if(mode==="lockdownnew"){ // LockDown (new): แท็บชื่อมีทั้ง lockdown และ new (เช่น "LockDown New")
+    return findSheet(LD_WB||WB,/lock\s*down.*new|new.*lock\s*down/i);
   }
   if(!WB) return null;
   const S=WB.Sheets, N=WB.SheetNames;
@@ -460,12 +469,12 @@ function readRate(ws){
   return c&&typeof c.v==="number"?c.v:null;
 }
 function fmtRate(){ return +(INSTALLMENT_RATE*100).toFixed(4); } // กัน 1.1500000000000001
-function modeLabel(){ return PRICE_MODE==="lockdown"?"LockDown":PRICE_MODE==="novat"?"NoVat":PRICE_MODE==="gaijin"?"Gaijin":PRICE_MODE==="gaijinnovat"?"Gaijin NoVat":PRICE_MODE==="promotion"?"Promotion":"Vat"; }
+function modeLabel(){ return PRICE_MODE==="lockdown"?"LockDown":PRICE_MODE==="lockdownnew"?"LockDown (new)":PRICE_MODE==="novat"?"NoVat":PRICE_MODE==="gaijin"?"Gaijin":PRICE_MODE==="gaijinnovat"?"Gaijin NoVat":PRICE_MODE==="promotion"?"Promotion":"Vat"; }
 // ป้ายบนหัวตารางในโบรชัวร์: ชีต Gaijin ใช้สูตรแบบ Vat จึงแสดง "Vat" (เปลี่ยนเป็น "Gaijin" ได้ที่นี่)
 function pillLabel(){ return (PRICE_MODE==="novat"||PRICE_MODE==="gaijinnovat")?"NoVat":"Vat"; }
 function syncModeButtons(){
   document.querySelectorAll("#vatToggle .chip").forEach(b=>b.classList.toggle("active",b.dataset.mode===PRICE_MODE));
-  const ld=$("ldRow"); if(ld) ld.style.display=PRICE_MODE==="lockdown"?"":"none"; // ปุ่มเลือกไฟล์โผล่เฉพาะโหมด LockDown
+  const ld=$("ldRow"); if(ld) ld.style.display=isLD(PRICE_MODE)?"":"none"; // ปุ่มเลือกไฟล์โผล่เฉพาะโหมด LockDown
 }
 
 // 4 เลย์เอาต์ตามแบบ AddedArtboard 1–4: ต่างกันแค่สีแถบหัวตาราง สีตัวอักษรสเปก และป้าย Vat/NoVat
@@ -477,7 +486,8 @@ const LAYOUTS={
   gaijin:     {preset:"green", spec:"#0b7a4b"},
   gaijinnovat:{preset:"pink",  spec:"#a41c35"},
   promotion:  {preset:"blue",  spec:"#1763ff"},
-  lockdown:   {preset:"gray",  spec:"#6d28d9", thead:"#3707aa"} // thead = สีแถบหัวตาราง (ทับสีของธีม)
+  lockdown:   {preset:"gray",  spec:"#6d28d9", thead:"#3707aa"}, // thead = สีแถบหัวตาราง (ทับสีของธีม)
+  lockdownnew:{preset:"gray",  spec:"#6d28d9", thead:"#3707aa"}  // สีเหมือน LockDown เดิมทุกอย่าง
 };
 function applyLayout(mode){
   const L=LAYOUTS[mode]||LAYOUTS.vat;
@@ -503,10 +513,10 @@ function loadSheetData(mode, keepBrand){
   // ล็อกจุดเริ่มอ่านที่ A1 เสมอ: ถ้าแถว 1 ว่าง (เช่นไม่มีอัตราที่ A1) SheetJS จะเริ่มนับจากแถวแรกที่มีข้อมูล ทำให้ข้ามแถวข้อมูลแถวแรก (แถว 3) ไป
   const rg=XLSX.utils.decode_range(ws["!ref"]||"A1:A1"); rg.s.r=0; rg.s.c=0;
   const aoa=XLSX.utils.sheet_to_json(ws,{header:1,raw:true,defval:null,range:rg});
-  if(mode==="lockdown"){ // เก็บเฉพาะ 5/10/15%: ใช้ตำแหน่งจากหัวคอลัมน์ "Down N%" ถ้าเจอ ไม่เจอใช้ตำแหน่งมาตรฐาน
-    const want=[5,10,15], pos={};
+  if(isLD(mode)){ // LockDown เดิม: 5/10/15% · LockDown (new): 0/10% — ใช้ตำแหน่งจากหัวคอลัมน์ "Down N%" ถ้าเจอ ไม่เจอใช้ตำแหน่งมาตรฐาน
+    const want=mode==="lockdownnew"?[0,10]:[5,10,15], pos={};
     (aoa[1]||[]).forEach((c,i)=>{ const m=/^\s*down\s*(\d+(?:\.\d+)?)\s*%/i.exec(String(c||"")); if(m){ const v=+m[1]; if(want.includes(v)&&pos[v]==null) pos[v]=i; } });
-    DOWNS=want.map((v,k)=>({pct:v+"%",start:pos[v]!=null?pos[v]:DOWNS_SETS.lockdown[k].start}));
+    DOWNS=want.map((v,k)=>({pct:v+"%",start:pos[v]!=null?pos[v]:DOWNS_SETS[mode][k].start}));
   }
   if(mode==="promotion"){ // อ่าน "Down N%" จากแถวหัวตาราง (แถว 2) ให้ตรงกับชีตเสมอ
     const found=[]; (aoa[1]||[]).forEach((c,i)=>{ const m=/^\s*down\s*(\d+(?:\.\d+)?)\s*%/i.exec(String(c||"")); if(m) found.push({pct:m[1]+"%",start:i}); });
@@ -530,12 +540,12 @@ function loadSheetData(mode, keepBrand){
 
 function setMode(mode){
   if(mode===PRICE_MODE) return;
-  if(mode==="lockdown"){
-    if(!getSheet("lockdown")){
-      PRICE_MODE="lockdown"; syncModeButtons();
-      $("status").textContent='ยังไม่มีข้อมูล LockDown — กด "เลือกไฟล์ LockDown" หรือเพิ่มชีต "Promotion" ในไฟล์ราคาหลัก';
+  if(isLD(mode)){
+    if(!getSheet(mode)){
+      PRICE_MODE=mode; syncModeButtons();
+      $("status").textContent='ยังไม่มีข้อมูล '+modeLabel()+' — กด "เลือกไฟล์ LockDown" หรือเพิ่มชีต "'+(mode==="lockdownnew"?LDNEW_SHEET:"Promotion")+'" ในไฟล์ราคาหลัก';
       $("intro").style.display="none";
-      $("output").innerHTML='<div class="page"><div class="empty">ยังไม่มีข้อมูล LockDown<br>กด "เลือกไฟล์ LockDown" ด้านบนเพื่อเลือกไฟล์</div></div>';
+      $("output").innerHTML='<div class="page"><div class="empty">ยังไม่มีข้อมูล '+modeLabel()+'<br>กด "เลือกไฟล์ LockDown" ด้านบนเพื่อเลือกไฟล์</div></div>';
       return;
     }
   } else if(WB && !getSheet(mode)){
@@ -544,7 +554,7 @@ function setMode(mode){
   }
   PRICE_MODE=mode;
   syncModeButtons();
-  if(mode==="lockdown"||WB) loadSheetData(mode,true);
+  if(isLD(mode)||WB) loadSheetData(mode,true);
 }
 document.querySelectorAll("#vatToggle .chip").forEach(b=>b.addEventListener("click",()=>setMode(b.dataset.mode)));
 // เลือกไฟล์ LockDown จากภายนอก -> อ่านชีต "LockDown" (หรือชีตแรก) แล้วสลับเข้าโหมด LockDown ทันที
@@ -555,9 +565,10 @@ $("ldInput").addEventListener("change",async(e)=>{
   try{
     await ensureFonts();
     LD_WB=XLSX.read(new Uint8Array(await f.arrayBuffer()),{type:"array"});
-    if(!getSheet("lockdown")) throw new Error('ไม่พบชีตชื่อ "Promotion" ในไฟล์นี้');
-    PRICE_MODE="lockdown"; syncModeButtons();
-    loadSheetData("lockdown",false);
+    const m=isLD(PRICE_MODE)?PRICE_MODE:"lockdown";
+    if(!getSheet(m)) throw new Error('ไม่พบชีตชื่อ "'+(m==="lockdownnew"?LDNEW_SHEET:"Promotion")+'" ในไฟล์นี้');
+    PRICE_MODE=m; syncModeButtons();
+    loadSheetData(m,false);
     $("ldName").textContent=f.name;
     $("status").textContent+=" · ไฟล์: "+f.name;
   }catch(err){
@@ -780,7 +791,7 @@ function pageHTML(cardsHTML, updStr, lineH, brand){
     </div>
     ${logoImgHTML(brand)}
     <div class="thead">
-      <div class="badges${PRICE_MODE==="lockdown"?" ld":""}">${PRICE_MODE==="lockdown"?`<img class="ld-logo" src="${LOCKDOWN_LOGO}" alt="LockDown">`:""}<span class="pill tax ${pillLabel()==="NoVat"?"novat":"vat"}">${pillLabel()}</span><span class="pill">*${fmtRate()}%</span><span class="pill ins">รวมประกัน</span></div>
+      <div class="badges${isLD(PRICE_MODE)?" ld":""}">${isLD(PRICE_MODE)?`<img class="ld-logo" src="${LOCKDOWN_LOGO}" alt="LockDown">`:""}<span class="pill tax ${pillLabel()==="NoVat"?"novat":"vat"}">${pillLabel()}</span><span class="pill">*${fmtRate()}%</span><span class="pill ins">รวมประกัน</span></div>
       <div></div><div>ราคา</div><div>ยอดจัด</div><div>ดาวน์</div>
       ${TERMS.map(t=>`<div>${t.l}</div>`).join("")}
     </div>
@@ -954,19 +965,26 @@ function gCell(v){ // CSV เป็นข้อความที่จัดร
   if(/^-?(\d{1,3}(,\d{3})+|\d+)(\.\d+)?$/.test(v)) return Number(v.replace(/,/g,""));
   return v;
 }
+const GSHEET_OPTIONAL=[LDNEW_SHEET]; // แท็บเสริม: ถ้าไม่มี/อ่านไม่ได้ จะข้ามไป ไม่ทำให้การโหลดทั้งชุดล้ม
 async function loadGoogleSheet(){
   const wb=XLSX.utils.book_new();
-  const parts=await Promise.all(GSHEET_TABS.map(async name=>{
-    const u="https://docs.google.com/spreadsheets/d/"+GSHEET_ID+"/gviz/tq?tqx=out:csv&headers=0&sheet="+encodeURIComponent(name);
-    const res=await fetch(u,{cache:"no-cache"});
-    if(!res.ok) throw new Error("ชีต \""+name+"\" HTTP "+res.status);
-    const txt=await res.text();
-    if(/^\s*</.test(txt)) throw new Error("Google ไม่ให้อ่านชีต \""+name+"\" (ตรวจว่าแชร์แบบทุกคนที่มีลิงก์ และเป็น Google Sheets แท้)");
-    let rows=csvParse(txt);
-    if(rows.length&&rows[0].every(x=>String(x).trim()==="")) rows.shift(); // บรรทัดป้ายคอลัมน์ว่างที่ gviz ใส่มาเมื่อ headers=0
-    return {name, aoa:rows.map(r=>r.map(gCell))};
+  const parts=await Promise.all(GSHEET_TABS.concat(GSHEET_OPTIONAL).map(async name=>{
+    const opt=GSHEET_OPTIONAL.includes(name);
+    try{
+      const u="https://docs.google.com/spreadsheets/d/"+GSHEET_ID+"/gviz/tq?tqx=out:csv&headers=0&sheet="+encodeURIComponent(name);
+      const res=await fetch(u,{cache:"no-cache"});
+      if(!res.ok) throw new Error("ชีต \""+name+"\" HTTP "+res.status);
+      const txt=await res.text();
+      if(/^\s*</.test(txt)) throw new Error("Google ไม่ให้อ่านชีต \""+name+"\" (ตรวจว่าแชร์แบบทุกคนที่มีลิงก์ และเป็น Google Sheets แท้)");
+      let rows=csvParse(txt);
+      if(rows.length&&rows[0].every(x=>String(x).trim()==="")) rows.shift(); // บรรทัดป้ายคอลัมน์ว่างที่ gviz ใส่มาเมื่อ headers=0
+      const aoa=rows.map(r=>r.map(gCell));
+      // แท็บเสริมต้องมีหัว "Down N%" ที่แถว 2 กัน gviz ส่งชีตอื่นกลับมาแทนเมื่อไม่มีแท็บชื่อนี้
+      if(opt && !(aoa[1]||[]).some(c=>/^\s*down\s*\d/i.test(String(c||"")))) return null;
+      return {name, aoa};
+    }catch(e){ if(opt) return null; throw e; }
   }));
-  parts.forEach(p=>XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(p.aoa),p.name));
+  parts.filter(Boolean).forEach(p=>XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(p.aoa),p.name));
   return wb;
 }
 
