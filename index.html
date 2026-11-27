@@ -270,7 +270,7 @@ const DOWNS_SETS={
   // LockDown: มีเงินดาวน์แค่ 5/10/15% เท่านั้น (ตำแหน่งคอลัมน์มาตรฐาน; ถ้าหัวคอลัมน์ "Down N%" อยู่ที่อื่นจะใช้ตำแหน่งตามหัวคอลัมน์)
   lockdown:[{pct:"5%",start:5},{pct:"10%",start:14},{pct:"15%",start:23}],
   // LockDown (new): 2 ก้อนแรกของชีต = ดาวน์ 0-5% (คอลัมน์ F) และ 10% (คอลัมน์ O)
-  lockdownnew:[{pct:"0%",start:5},{pct:"10%",start:14}],
+  lockdownnew:[{pct:"5%",start:5},{pct:"10%",start:14}],
   gaijinnovat:[{pct:"20%",start:5},{pct:"25%",start:14},{pct:"30%",start:23},{pct:"35%",start:32},{pct:"40%",start:41}],
 };
 let DOWNS=DOWNS_SETS.vat;
@@ -515,7 +515,7 @@ function loadSheetData(mode, keepBrand){
     DOWNS=want.map((v,k)=>({pct:v+"%",start:pos[v]!=null?pos[v]:DOWNS_SETS.lockdown[k].start}));
   }
   if(mode==="lockdownnew"){ // LockDown (new): เอาแค่ 2 ก้อนแรกของชีตตามตำแหน่ง (ก้อนที่ 1 = ดาวน์ 0-5% · ก้อนที่ 2 = ดาวน์ 10%)
-    // ป้าย % อ่านจากหัวคอลัมน์ "Down N%" ของก้อนนั้น (พิมพ์ 0% หรือ 5% ในชีตก็ขึ้นตามนั้น) ถ้าหัวว่างใช้ค่าเริ่มต้น 0% / 10%
+    // ป้าย % อ่านจากหัวคอลัมน์ "Down N%" ของก้อนนั้น (พิมพ์ 0% หรือ 5% ในชีตก็ขึ้นตามนั้น) ถ้าอ่านหัวไม่เจอใช้ค่าเริ่มต้น 5% / 10%
     DOWNS=DOWNS_SETS.lockdownnew.map(d=>{
       const m=/^\s*down\s*(\d+(?:\.\d+)?)\s*%/i.exec(String((aoa[1]||[])[d.start]||""));
       return {pct:m?m[1]+"%":d.pct, start:d.start};
